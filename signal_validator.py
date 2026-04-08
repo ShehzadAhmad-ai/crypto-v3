@@ -26,8 +26,7 @@ from dataclasses import dataclass, field
 
 from config import Config
 from logger import log
-from signal_model import Signal, SignalStatus, EntryType
-from expert_interface import CombinedSignal
+from unified_signal import UnifiedSignal, SignalStatus, EntryType
 
 @dataclass
 class ValidationResult:
@@ -93,7 +92,7 @@ class SignalValidator:
         log.info(f"  Stop Hunt: {self.enable_stop_hunt_detection}")
         log.info("=" * 60)
     
-    def validate_final_signal(self, signal: CombinedSignal, df: Optional[pd.DataFrame] = None,
+    def validate_final_signal(self, signal: UnifiedSignal, df: Optional[pd.DataFrame] = None,
                              market_context: Optional[Dict] = None,
                              liquidity_data: Optional[Dict] = None,
                              structure_data: Optional[Dict] = None) -> ValidationResult:
@@ -370,7 +369,7 @@ class SignalValidator:
     
     # ==================== NEW CHECK: EXPERT CONSISTENCY ====================
     
-    def _check_expert_consistency(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_expert_consistency(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Check if expert signals are consistent with final direction"""
         details = {}
         
@@ -397,7 +396,7 @@ class SignalValidator:
     
     # ==================== NEW CHECK: GRADE THRESHOLD ====================
     
-    def _check_grade_threshold(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_grade_threshold(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Check if signal grade meets minimum threshold"""
         grade_order = {'A+': 1, 'A': 2, 'B+': 3, 'B': 4, 'B-': 5, 'C+': 6, 'C': 7, 'C-': 8, 'D': 9, 'F': 10}
         
@@ -418,7 +417,7 @@ class SignalValidator:
     
     # ==================== EXISTING METHODS (Keep as is) ====================
     
-    def _check_signal_integrity(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_signal_integrity(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Check if signal object has all required fields"""
         details = {}
         missing_fields = []
@@ -439,7 +438,7 @@ class SignalValidator:
         
         return True, "Signal integrity OK", details
     
-    def _check_probability_threshold(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_probability_threshold(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Check if final probability meets minimum threshold"""
         details = {
             'probability': signal.probability,
@@ -451,7 +450,7 @@ class SignalValidator:
         
         return True, f"Probability {signal.probability:.1%} meets threshold", details
     
-    def _check_risk_reward(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_risk_reward(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Validate risk/reward ratio"""
         details = {
             'risk_reward': signal.risk_reward_ratio,
@@ -463,7 +462,7 @@ class SignalValidator:
         
         return True, f"Risk/Reward {signal.risk_reward_ratio:.2f} OK", details
     
-    def _check_entry_zone(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_entry_zone(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Validate entry zone logic"""
         details = {
             'zone_low': signal.entry_zone_low,
@@ -485,7 +484,7 @@ class SignalValidator:
         
         return True, "Entry zone valid", details
     
-    def _check_stop_loss(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_stop_loss(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Validate stop loss logic based on direction"""
         details = {
             'stop_loss': signal.stop_loss,
@@ -506,7 +505,7 @@ class SignalValidator:
         
         return True, "Stop loss valid", details
     
-    def _check_take_profit(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_take_profit(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Validate take profit logic based on direction"""
         details = {
             'take_profit': signal.take_profit,
@@ -527,7 +526,7 @@ class SignalValidator:
         
         return True, "Take profit valid", details
     
-    def _check_duplicate_signal(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_duplicate_signal(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Check for duplicate signals within cooldown period"""
         details = {
             'cooldown_minutes': self.cooldown_minutes
@@ -554,7 +553,7 @@ class SignalValidator:
         
         return True, "No duplicate signal detected", details
     
-    def _check_signal_expiry(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_signal_expiry(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Check if signal has expired"""
         age_minutes = (datetime.now() - signal.timestamp).total_seconds() / 60
         
@@ -586,7 +585,7 @@ class SignalValidator:
         else:
             return False, f"Suboptimal trading hour ({hour}:00 UTC)", details
     
-    def _check_market_regime_compatibility(self, signal: Signal, market_context: Dict) -> Tuple[bool, str, Dict]:
+    def _check_market_regime_compatibility(self, signal: UnifiedSignal, market_context: Dict) -> Tuple[bool, str, Dict]:
         """Check if signal direction aligns with market regime"""
         regime = market_context.get('composite_regime', 'UNKNOWN')
         trend = market_context.get('trend', 'NEUTRAL')
@@ -613,7 +612,7 @@ class SignalValidator:
         
         return True, "Neutral regime", details
     
-    def _check_volatility_compatibility(self, signal: Signal, df: pd.DataFrame) -> Tuple[bool, str, Dict]:
+    def _check_volatility_compatibility(self, signal: UnifiedSignal, df: pd.DataFrame) -> Tuple[bool, str, Dict]:
         """Check if volatility is appropriate for this signal"""
         if 'atr' not in df.columns:
             return True, "No volatility data", {}
@@ -640,7 +639,7 @@ class SignalValidator:
         
         return True, "Volatility compatible", details
     
-    def _check_position_size(self, signal: Signal) -> Tuple[bool, str, Dict]:
+    def _check_position_size(self, signal: UnifiedSignal) -> Tuple[bool, str, Dict]:
         """Check position size sanity"""
         if not hasattr(signal, 'position_size') or not hasattr(signal, 'position_value'):
             return True, "No position size data", {}
@@ -658,7 +657,7 @@ class SignalValidator:
     
     # ==================== ADVANCED DETECTION METHODS ====================
     
-    def _check_fakeout(self, signal: Signal, df: pd.DataFrame) -> Tuple[bool, str, Dict]:
+    def _check_fakeout(self, signal: UnifiedSignal, df: pd.DataFrame) -> Tuple[bool, str, Dict]:
         """
         Detect fakeout patterns:
         - Price breaks above resistance but closes below (bearish fakeout)
@@ -729,7 +728,7 @@ class SignalValidator:
             log.debug(f"Fakeout detection error: {e}")
             return True, f"Fakeout check error: {e}", {'error': str(e)}
     
-    def _check_liquidity_trap(self, signal: Signal, liquidity_data: Dict, 
+    def _check_liquidity_trap(self, signal: UnifiedSignal, liquidity_data: Dict, 
                                df: Optional[pd.DataFrame] = None) -> Tuple[bool, str, Dict]:
         """Detect liquidity traps near equal highs/lows"""
         try:
@@ -766,7 +765,7 @@ class SignalValidator:
             log.debug(f"Liquidity trap detection error: {e}")
             return True, f"Liquidity trap check error: {e}", {'error': str(e)}
     
-    def _check_stop_hunt(self, signal: Signal, df: pd.DataFrame) -> Tuple[bool, str, Dict]:
+    def _check_stop_hunt(self, signal: UnifiedSignal, df: pd.DataFrame) -> Tuple[bool, str, Dict]:
         """Detect stop hunts with large wicks and reversals"""
         try:
             if len(df) < 10:
@@ -807,7 +806,7 @@ class SignalValidator:
     
     # ==================== UTILITY METHODS ====================
     
-    def _generate_suggestions(self, signal: Signal) -> List[str]:
+    def _generate_suggestions(self, signal: UnifiedSignal) -> List[str]:
         """Generate actionable suggestions based on validation results"""
         suggestions = []
         
@@ -840,7 +839,7 @@ class SignalValidator:
         
         return suggestions[:5]
     
-    def _record_signal(self, signal: Signal):
+    def _record_signal(self, signal: UnifiedSignal):
         """Record successfully validated signal for duplicate prevention"""
         key = f"{signal.symbol}_{signal.direction}"
         if key not in self.recent_signals:
@@ -851,7 +850,7 @@ class SignalValidator:
         cutoff = datetime.now() - timedelta(minutes=self.cooldown_minutes)
         self.recent_signals[key] = [ts for ts in self.recent_signals[key] if ts > cutoff]
     
-    def _log_validation_result(self, result: ValidationResult, signal: Signal):
+    def _log_validation_result(self, result: ValidationResult, signal: UnifiedSignal):
         """Log validation result with appropriate level"""
         if result.is_valid:
             log.info(f"\n[VALIDATION PASSED] {signal.symbol} {signal.timeframe}")

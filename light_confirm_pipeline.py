@@ -11,7 +11,7 @@ import numpy as np
 
 from config import Config
 from logger import log
-from signal_model import Signal, SignalStatus
+from unified_signal import UnifiedSignal, SignalStatus
 from phase5_data_fetcher import Phase5DataFetcher
 from cross_asset_engine import CrossAssetEngine
 from funding_oi_engine import FundingOIAnalyzer
@@ -55,7 +55,7 @@ class LightConfirmPipeline:
         log.info(f"  Min Score: {self.min_score}")
         log.info("=" * 60)
     
-    def confirm(self, signal: Signal, df: pd.DataFrame) -> Optional[Signal]:
+    def confirm(self, signal: UnifiedSignal, df: pd.DataFrame) -> Optional[UnifiedSignal]:
         """
         Run light confirmations on a signal that passed Phase 4
         
@@ -67,7 +67,7 @@ class LightConfirmPipeline:
             Updated signal or None if filtered out
         """
         # Only run on signals that passed Smart Money
-        if signal.status != SignalStatus.SMART_MONEY_PASSED:
+        if signal.status != "SMART_MONEY_PASSED":
             return None
         
         try:
@@ -144,7 +144,7 @@ class LightConfirmPipeline:
             
             # Add confirmation reasons
             signal.confirmation_reasons.extend(component_reasons[:3])
-            signal.status = SignalStatus.LIGHT_CONFIRM_PASSED
+            signal.status = "LIGHT_CONFIRM_PASSED"
             
             # Update final score (combine with existing)
             signal.final_score = (
@@ -388,7 +388,7 @@ class LightConfirmPipeline:
             return min(0.99, max(0.01, total_score / total_weight))
         return 0.5
     
-    def _print_light_confirm_output(self, signal: Signal, scores: Dict, summaries: Dict):
+    def _print_light_confirm_output(self, signal: UnifiedSignal, scores: Dict, summaries: Dict):
         """Print formatted light confirm output"""
         log.info("\n" + "=" * 70)
         log.info(f"[LIGHT CONFIRM] {signal.symbol} {signal.timeframe}")

@@ -22,8 +22,8 @@ from datetime import datetime
 
 from config import Config
 from logger import log
-from expert_interface import CombinedSignal, TPLevel, ExpertSignal
-from signal_model import Signal, SignalStatus, EntryType
+from unified_signal import UnifiedSignal, TPLevel, SignalStatus
+from expert_interface import ExpertSignal
 
 # Import risk components
 from risk_analyzer import RiskAnalyzer, StopLossResult, TakeProfitResult, EntryZoneResult
@@ -146,12 +146,12 @@ class RiskPipeline:
     # MAIN PROCESSING METHOD
     # ========================================================================
     
-    def process_signal(self, signal: CombinedSignal, df: pd.DataFrame,
-                       market_regime: Dict, structure_data: Dict,
-                       sr_data: Dict, volume_data: Dict = None,
-                       liquidity_data: Dict = None,
-                       orderflow_data: Dict = None,
-                       layer_scores: Dict = None) -> Optional[CombinedSignal]:
+    def process_signal(self, signal: UnifiedSignal, df: pd.DataFrame,
+                    market_regime: Dict, structure_data: Dict,
+                    sr_data: Dict, volume_data: Dict = None,
+                    liquidity_data: Dict = None,
+                    orderflow_data: Dict = None,
+                    layer_scores: Dict = None) -> Optional[UnifiedSignal]:
         """
         Process a signal through risk management (Phase 8)
         
@@ -172,7 +172,7 @@ class RiskPipeline:
             Enhanced CombinedSignal with all risk-managed fields
         """
         # Only run on signals that passed Light Confirm
-        if not signal or not signal.consensus_reached:
+        if not signal or not getattr(signal, 'consensus_reached', False):
             return None
         
         try:
@@ -541,7 +541,7 @@ class RiskPipeline:
     # OUTPUT
     # ========================================================================
     
-    def _print_risk_output(self, signal: CombinedSignal, 
+    def _print_risk_output(self, signal: UnifiedSignal,
                            risk_managed_stop: Optional[StopLossResult],
                            risk_managed_tp: Optional[TakeProfitResult],
                            entry_zone: EntryZoneResult,
@@ -625,12 +625,12 @@ class RiskPipeline:
 # CONVENIENCE FUNCTION
 # ============================================================================
 
-def apply_risk_management(signal: CombinedSignal, df: pd.DataFrame,
+def apply_risk_management(signal: UnifiedSignal, df: pd.DataFrame,
                           market_regime: Dict, structure_data: Dict,
                           sr_data: Dict, volume_data: Dict = None,
                           liquidity_data: Dict = None,
                           orderflow_data: Dict = None,
-                          portfolio_value: float = None) -> Optional[CombinedSignal]:
+                          portfolio_value: float = None) -> Optional[UnifiedSignal]:
     """
     Convenience function to apply risk management to a signal
     

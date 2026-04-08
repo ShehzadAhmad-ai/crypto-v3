@@ -1,4 +1,4 @@
-# timing_pipeline.py - SIMPLIFIED VERSION (Entry Only)
+# timing_pipeline.py - 
 """
 Timing Prediction Pipeline (Phase 7) - Simplified
 Predicts expected time to entry only (no TP timing)
@@ -9,7 +9,7 @@ import pandas as pd
 
 from config import Config
 from logger import log
-from signal_model import Signal, SignalStatus
+from unified_signal import UnifiedSignal, SignalStatus
 from entry_timing_predictor import EntryTimingPredictor, TimingPrediction
 
 
@@ -24,7 +24,7 @@ class TimingPipeline:
         self.predictor = EntryTimingPredictor()
         log.info("Timing Pipeline initialized (Simplified - Entry Only)")
     
-    def process_signal(self, signal: Signal, df: pd.DataFrame) -> Optional[Signal]:
+    def process_signal(self, signal: UnifiedSignal, df: pd.DataFrame) -> Optional[UnifiedSignal]:
         """
         Process a signal through timing prediction
         
@@ -36,7 +36,7 @@ class TimingPipeline:
             Updated signal with entry timing prediction
         """
         # Only run on signals that passed Validation (FINAL)
-        if signal.status != SignalStatus.FINAL:
+        if signal.status != "FINAL":
             return None
         
         try:
@@ -84,7 +84,7 @@ class TimingPipeline:
             log.error(f"Error in timing pipeline for {signal.symbol}: {e}")
             return signal  # Return original signal on error
     
-    def _print_timing_output(self, signal: Signal, prediction: TimingPrediction):
+    def _print_timing_output(self, signal: UnifiedSignal, prediction: TimingPrediction):
         """Print formatted timing output"""
         log.info("\n" + "=" * 60)
         log.info(f"[TIMING] {signal.symbol} {signal.timeframe}")

@@ -382,7 +382,157 @@ class ConsensusResult:
         }
 
 
+
+
 # ============================================================================
+# ADAPTER METHODS - Convert between CombinedSignal and legacy Signal
+# ============================================================================
+
+def signal_to_combined(signal) -> 'CombinedSignal':
+    """
+    Convert legacy Signal object to CombinedSignal
+    
+    Args:
+        signal: Legacy Signal object from signal_model.py
+    
+    Returns:
+        CombinedSignal object
+    """
+    from expert_interface import CombinedSignal, TPLevel  # No circular import needed
+    
+    # Convert TP levels
+    tp_levels = []
+    
+    # Check for take_profit_levels (list of dicts)
+    if hasattr(signal, 'take_profit_levels') and signal.take_profit_levels:
+        for tp in signal.take_profit_levels:
+            if isinstance(tp, dict):
+                tp_levels.append(TPLevel(
+                    price=tp.get('price', 0),
+                    percentage=tp.get('percentage', 0.25),
+                    description=tp.get('description', f"TP{len(tp_levels)+1}")
+                ))
+            elif hasattr(tp, 'price'):  # TPLevel object
+                tp_levels.append(tp)
+    
+    # Fallback to single take_profit
+    elif hasattr(signal, 'take_profit') and signal.take_profit:
+        tp_levels.append(TPLevel(
+            price=signal.take_profit,
+            percentage=1.0,
+            description="Primary target"
+        ))
+    
+    # Create CombinedSignal
+    return CombinedSignal(
+        direction=signal.direction,
+        entry=signal.entry,
+        stop_loss=signal.stop_loss,
+        tp_levels=tp_levels,
+        confidence=signal.confidence,
+        grade=getattr(signal, 'grade', 'C'),
+        total_experts=getattr(signal, 'total_experts', 5),
+        agreeing_experts=getattr(signal, 'agreeing_experts', 0),
+        opposing_experts=getattr(signal, 'opposing_experts', 0),
+        neutral_experts=getattr(signal, 'neutral_experts', 0),
+        agreement_ratio=getattr(signal, 'agreement_ratio', 0),
+        consensus_reached=getattr(signal, 'consensus_reached', True),
+        expert_details=getattr(signal, 'expert_details', {}),
+        symbol=getattr(signal, 'symbol', ''),
+        timeframe=getattr(signal, 'timeframe', ''),
+        status=getattr(signal, 'status', 'PENDING'),
+        metadata=getattr(signal, 'metadata', {}),
+        weighted_confidence=getattr(signal, 'weighted_confidence', 0.0),
+        smart_money_score=getattr(signal, 'smart_money_score', 0.0),
+        orderflow_bias=getattr(signal, 'orderflow_bias', 'NEUTRAL')
+    )
+
+
+def combined_to_signal(combined: 'CombinedSignal'):
+    """
+    Convert CombinedSignal to legacy Signal object
+    
+    Args:
+        combined: CombinedSignal object
+    
+    Returns:
+        Signal object (from signal_model)
+    """
+    from signal_model import Signal, SignalStatus  # Import here to avoid circular import
+    
+    # Map status string to SignalStatus enum
+    status_map = {
+        'PENDING': SignalStatus.PENDING,
+        'MTF_PASSED': SignalStatus.MTF_PASSED,
+        'SMART_MONEY_PASSED': SignalStatus.SMART_MONEY_PASSED,
+        'FINAL': SignalStatus.FINAL,
+        'REJECTED': SignalStatus.REJECTED
+    }
+    
+    # Create base Signal
+    signal = Signal(
+        symbol=combined.symbol,
+        direction=combined.direction,
+        entry=combined.entry,
+        stop_loss=combined.stop_loss,
+        take_profit=combined.tp_levels[0].price if combined.tp_levels else 0,
+        confidence=combined.confidence,
+        timeframe=combined.timeframe
+    )
+    
+    # Add additional attributes
+    signal.grade = combined.grade
+    signal.consensus_reached = combined.consensus_reached
+    signal.expert_details = combined.expert_details
+    signal.take_profit_levels = [tp.to_dict() for tp in combined.tp_levels]
+    signal.status = status_map.get(combined.status, SignalStatus.PENDING)
+    signal.metadata = combined.metadata if hasattr(combined, 'metadata') else {}
+    
+    # Phase-specific attributes
+    if hasattr(combined, 'weighted_confidence'):
+        signal.weighted_confidence = combined.weighted_confidence
+    if hasattr(combined, 'smart_money_score'):
+        signal.smart_money_score = combined.smart_money_score
+    if hasattr(combined, 'orderflow_bias'):
+        signal.orderflow_bias = combined.orderflow_bias
+    
+    return signal
+
+
+def ensure_combined_signal(signal):
+    """
+    Ensure we have a CombinedSignal (convert if needed)
+    
+    Args:
+        signal: Either CombinedSignal or legacy Signal
+    
+    Returns:
+        CombinedSignal
+    """
+    # Check if it's already CombinedSignal (has tp_levels)
+    if hasattr(signal, 'tp_levels'):
+        return signal
+    else:  # Legacy Signal
+        return signal_to_combined(signal)
+
+
+def ensure_legacy_signal(signal):
+    """
+    Ensure we have a legacy Signal (convert if needed)
+    
+    Args:
+        signal: Either CombinedSignal or legacy Signal
+    
+    Returns:
+        legacy Signal
+    """
+    # Check if it's CombinedSignal (has tp_levels)
+    if hasattr(signal, 'tp_levels'):
+        return combined_to_signal(signal)
+    else:  # Already legacy
+        return signal
+    
+    # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -399,7 +549,7 @@ def create_skip_signal(expert_name: str, reason: str) -> ExpertSignal:
 
 
 def create_direction_only_signal(expert_name: str, direction: str, 
-                                  confidence: float, reason: str) -> ExpertSignal:
+                                confidence: float, reason: str) -> ExpertSignal:
     """Create a direction-only signal (when expert can't give full trade setup)"""
     return ExpertSignal(
         expert_name=expert_name,
@@ -420,3 +570,4 @@ def is_tradeable_signal(signal: ExpertSignal) -> bool:
 def is_full_signal(signal: ExpertSignal) -> bool:
     """Check if signal has full trade setup (not direction-only)"""
     return not signal.is_direction_only and signal.entry > 0 and signal.stop_loss > 0
+

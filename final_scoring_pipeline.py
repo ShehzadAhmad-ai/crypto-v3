@@ -23,7 +23,7 @@ from datetime import datetime
 
 from config import Config
 from logger import log
-from signal_model import Signal, SignalStatus
+from unified_signal import UnifiedSignal, SignalStatus
 
 
 class FinalScoringPipeline:
@@ -134,7 +134,7 @@ class FinalScoringPipeline:
     # MAIN PROCESSING
     # ========================================================================
     
-    def process_signal(self, signal: Signal) -> Optional[Signal]:
+    def process_signal(self, signal: UnifiedSignal) -> Optional[UnifiedSignal]:
         """
         Process signal through final scoring (Phase 9)
         
@@ -145,7 +145,7 @@ class FinalScoringPipeline:
             Updated signal with final probability and grade
         """
         # Only run on signals that passed Risk Management
-        if signal.status not in [SignalStatus.RISK_PASSED, SignalStatus.TIMING_PASSED]:
+        if signal.status not in ['RISK_PASSED', 'TIMING_PASSED']:
             log.debug(f"Signal status {signal.status} not eligible for final scoring")
             return None
         
@@ -212,7 +212,7 @@ class FinalScoringPipeline:
                 log.debug(f"Signal {signal.symbol} not tradeable: probability {final_probability:.1%} < {self.min_probability:.1%}")
                 return None
             
-            signal.status = SignalStatus.FINAL
+            signal.status = "FINAL"
             
             # ===== STEP 12: PRINT OUTPUT =====
             self._print_final_output(signal, scores, agreement_metrics, final_probability, grade, confidence)
@@ -227,7 +227,7 @@ class FinalScoringPipeline:
     # SCORE COLLECTION
     # ========================================================================
     
-    def _collect_scores(self, signal: Signal) -> Dict[str, float]:
+    def _collect_scores(self, signal: UnifiedSignal) -> Dict[str, float]:
         """Collect scores from all phases"""
         scores = {}
         
@@ -301,7 +301,7 @@ class FinalScoringPipeline:
         else:
             return max(0.1, risk_reward / 3.0)
     
-    def _calculate_agreement_metrics(self, signal: Signal) -> Dict[str, float]:
+    def _calculate_agreement_metrics(self, signal: UnifiedSignal) -> Dict[str, float]:  
         """Calculate agreement metrics from Phase 4 (Expert Consensus)"""
         metrics = {
             'expert_agreement': 0.0,
@@ -385,7 +385,7 @@ class FinalScoringPipeline:
     # BAYESIAN ADJUSTMENT
     # ========================================================================
     
-    def _bayesian_adjustment(self, current_prob: float, signal: Signal) -> float:
+    def _bayesian_adjustment(self, current_prob: float, signal: UnifiedSignal) -> float:
         """Apply Bayesian adjustment based on historical performance"""
         if len(self.performance_history) < 10:
             return current_prob
@@ -503,11 +503,11 @@ class FinalScoringPipeline:
     # UTILITY METHODS
     # ========================================================================
     
-    def is_tradeable(self, signal: Signal) -> bool:
+    def is_tradeable(self, signal: UnifiedSignal) -> bool:
         """Check if signal meets minimum thresholds"""
         return signal.probability >= self.min_probability
     
-    def record_outcome(self, signal: Signal, won: bool):
+    def record_outcome(self, signal: UnifiedSignal, won: bool):
         """Record trade outcome for Bayesian learning"""
         self.performance_history.append({
             'symbol': signal.symbol,
@@ -554,7 +554,7 @@ class FinalScoringPipeline:
     # OUTPUT
     # ========================================================================
     
-    def _print_final_output(self, signal: Signal, scores: Dict,
+    def _print_final_output(self, signal: UnifiedSignal, scores: Dict,
                            agreement: Dict, probability: float,
                            grade: str, confidence: float):
         """Print formatted final output"""

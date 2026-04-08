@@ -15,7 +15,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 
 from logger import log
-from signal_model import Signal, SignalStatus, SignalStage, TakeProfitLevel
+from unified_signal import UnifiedSignal, SignalStatus, SignalStage, TakeProfitLevel
 
 
 class SignalExporter:
@@ -41,7 +41,7 @@ class SignalExporter:
             'strategy': 'Strategy'
         }
     
-    def export_signal(self, signal: Signal, stage: SignalStage) -> Dict[str, Any]:
+    def export_signal(self, signal: UnifiedSignal, stage: SignalStage) -> Dict[str, Any]:
         """
         Export signal with clean data - Enhanced with Phase 4 expert consensus
         
@@ -205,7 +205,7 @@ class SignalExporter:
         
         return clean_data
     
-    def _get_story(self, signal: Signal, metadata: Dict) -> str:
+    def _get_story(self, signal: UnifiedSignal, metadata: Dict) -> str:
         """Get human-readable story with expert consensus"""
         # Try to get from metadata first
         story = metadata.get('story', '')
@@ -243,7 +243,7 @@ class SignalExporter:
         
         return story[:self.max_story_length]
     
-    def _get_summary(self, signal: Signal, metadata: Dict) -> str:
+    def _get_summary(self, signal: UnifiedSignal, metadata: Dict) -> str:
         """Get one-line summary with grade and consensus"""
         # Try from metadata
         summary = metadata.get('story_summary', '')
@@ -279,7 +279,7 @@ class SignalExporter:
     
     # ==================== SAVE METHODS ====================
     
-    def save_signal(self, signal: Signal, stage: SignalStage, filepath: Path):
+    def save_signal(self, signal: UnifiedSignal, stage: SignalStage, filepath: Path):
         """
         Save signal with clean data to file
         
@@ -315,7 +315,7 @@ class SignalExporter:
         
         log.debug(f"Saved {stage.value} signal for {signal.symbol} to {filepath}")
     
-    def save_signals_batch(self, signals: List[Signal], stage: SignalStage, filepath: Path):
+    def save_signals_batch(self, signals: List[UnifiedSignal], stage: SignalStage, filepath: Path):
         """
         Save multiple signals to file
         

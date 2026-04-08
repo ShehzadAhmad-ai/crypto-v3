@@ -20,12 +20,10 @@ import numpy as np
 
 from config import Config
 from logger import log
-from signal_model import Signal, SignalStatus
-from expert_interface import CombinedSignal, ExpertSignal, ExpertName
 from expert_aggregator import ExpertAggregator, DEFAULT_CONFIG
 from expert_executor import ExpertExecutor
-from expert_interface import CombinedSignal, ExpertSignal, ExpertName 
-
+from unified_signal import UnifiedSignal, TPLevel
+from expert_interface import ExpertSignal, ExpertName
 
 # ============================================================================
 # MTF CONFIGURATION
@@ -71,10 +69,10 @@ class MTFConfig:
 class HTFAnalysisResult:
     """Result of analyzing a single higher timeframe"""
     
-    def __init__(self, timeframe: str, combined_signal: CombinedSignal, 
-                 expert_signals: List[ExpertSignal]):
+    def __init__(self, timeframe: str, unified_signal: UnifiedSignal, 
+                expert_signals: List[ExpertSignal]):
         self.timeframe = timeframe
-        self.combined_signal = combined_signal
+        self.unified_signal = unified_signal
         self.expert_signals = expert_signals
         
         # Calculate alignment with primary signal
@@ -83,15 +81,15 @@ class HTFAnalysisResult:
         
     @property
     def direction(self) -> str:
-        return self.combined_signal.direction if self.combined_signal else "NEUTRAL"
-    
+        return self.unified_signal.direction if self.unified_signal else "NEUTRAL"
+
     @property
     def confidence(self) -> float:
-        return self.combined_signal.confidence if self.combined_signal else 0.0
-    
+        return self.unified_signal.confidence if self.unified_signal else 0.0
+
     @property
     def has_signal(self) -> bool:
-        return self.combined_signal is not None
+        return self.unified_signal is not None
     
     def calculate_alignment(self, primary_direction: str, 
                             primary_confidence: float) -> float:
@@ -252,17 +250,22 @@ class MTFAggregatedResult:
         self.story = " | ".join(parts)
         self.reasons = reasons
     
-    def apply_to_signal(self, signal: CombinedSignal) -> CombinedSignal:
+    def apply_to_signal(self, signal: UnifiedSignal) -> UnifiedSignal:
         """Apply MTF boost/penalty to signal confidence"""
         if not self.is_confirmed:
-            # Penalize
             new_confidence = signal.confidence * (1 + self.confidence_boost)
         else:
-            # Boost
             new_confidence = signal.confidence * (1 + self.confidence_boost)
         
         signal.confidence = min(0.95, max(0.05, new_confidence))
         signal.weighted_confidence = signal.confidence
+        signal.mtf_score = self.weighted_alignment
+        signal.mtf_aligned = self.is_confirmed
+        signal.mtf_alignment_quality = self.alignment_quality
+        signal.confirming_timeframes = [tf for tf, res in self.timeframe_results.items() 
+                                        if res.has_signal and res.direction == signal.direction]
+        signal.conflicting_timeframes = [tf for tf, res in self.timeframe_results.items() 
+                                        if res.has_signal and res.direction != signal.direction]
         
         # Add MTF metadata
         if not hasattr(signal, 'metadata'):
@@ -276,10 +279,8 @@ class MTFAggregatedResult:
             'bullish_htf_count': self.bullish_count,
             'bearish_htf_count': self.bearish_count,
             'neutral_htf_count': self.neutral_count,
-            'confirming_timeframes': [tf for tf, res in self.timeframe_results.items() 
-                                      if res.has_signal and res.direction == signal.direction],
-            'conflicting_timeframes': [tf for tf, res in self.timeframe_results.items() 
-                                       if res.has_signal and res.direction != signal.direction],
+            'confirming_timeframes': signal.confirming_timeframes,
+            'conflicting_timeframes': signal.conflicting_timeframes,
             'story': self.story,
             'reasons': self.reasons
         }
@@ -339,8 +340,8 @@ class MTFPipeline:
         log.info(f"  Min MTF Score: {self.config.min_mtf_score}")
         log.info(f"  Max Boost/Penalty: {self.config.max_boost}/{self.config.max_penalty}")
     
-    def confirm(self, signal: CombinedSignal, symbol: str, 
-                timeframe: str, df: pd.DataFrame) -> Optional[CombinedSignal]:
+    def confirm(self, signal: UnifiedSignal, symbol: str, 
+                timeframe: str, df: pd.DataFrame) -> Optional[UnifiedSignal]:
         """
         Run MTF confirmation on a combined signal
         
@@ -353,6 +354,9 @@ class MTFPipeline:
         Returns:
             Updated CombinedSignal with MTF metadata, or None if filtered
         """
+
+        
+
         if not signal or not signal.consensus_reached:
             log.debug(f"MTF: No consensus signal for {symbol}, skipping")
             return None
@@ -489,9 +493,9 @@ class MTFPipeline:
 # CONVENIENCE FUNCTION
 # ============================================================================
 
-def confirm_mtf_signal(signal: CombinedSignal, symbol: str, 
+def confirm_mtf_signal(signal: UnifiedSignal, symbol: str, 
                        timeframe: str, df: pd.DataFrame,
-                       data_fetcher) -> Optional[CombinedSignal]:
+                       data_fetcher) -> Optional[UnifiedSignal]:
     """
     Convenience function to run MTF confirmation
     

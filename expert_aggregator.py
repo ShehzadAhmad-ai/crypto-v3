@@ -15,7 +15,7 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 from expert_weight_manager import ExpertWeightManager
-
+from unified_signal import UnifiedSignal, TPLevel
 from expert_interface import (
     ExpertSignal, CombinedSignal, TPLevel, ConsensusResult,
     is_tradeable_signal, is_full_signal
@@ -82,7 +82,7 @@ class ExpertAggregator:
         self._load_from_config()
         
         # Aggregation history
-        self.aggregation_history: List[CombinedSignal] = []
+        self.aggregation_history: List[UnifiedSignal] = []
         
         if self.config['debug']:
             print(f"[ExpertAggregator] Initialized with min_agreement={self.config['min_experts_to_agree']}")
@@ -118,7 +118,7 @@ class ExpertAggregator:
     # MAIN AGGREGATION METHOD
     # ============================================================================
     
-    def aggregate(self, expert_signals: List[ExpertSignal]) -> Optional[CombinedSignal]:
+    def aggregate(self, expert_signals: List[ExpertSignal]) -> Optional[UnifiedSignal]:
         """
         Aggregate 5 expert signals into one combined signal
         
@@ -211,7 +211,7 @@ class ExpertAggregator:
         grade = self._determine_grade(confidence, consensus.agreement_ratio, risk_reward)
         
         # ===== STEP 10: CREATE COMBINED SIGNAL =====
-        combined = CombinedSignal(
+        combined = UnifiedSignal(
             direction=direction,
             entry=round(entry, 6),
             stop_loss=round(stop_loss, 6),
@@ -628,7 +628,7 @@ class ExpertAggregator:
 # ============================================================================
 
 def aggregate_expert_signals(expert_signals: List[ExpertSignal], 
-                             config: Dict = None) -> Optional[CombinedSignal]:
+                             config: Dict = None) -> Optional[UnifiedSignal]:
     """
     Convenience function to aggregate expert signals
     

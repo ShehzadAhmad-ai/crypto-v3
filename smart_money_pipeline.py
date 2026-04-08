@@ -12,6 +12,7 @@ Runs all smart money components:
 
 Uses order book if available, falls back to OHLCV only
 """
+
 from typing import Dict, Optional, List, Any
 from datetime import datetime
 import pandas as pd
@@ -19,7 +20,7 @@ import numpy as np
 
 from config import Config
 from logger import log
-from signal_model import Signal, SignalStatus
+from unified_signal import UnifiedSignal
 
 # Import all smart money modules
 from liquidity import LiquidityIntelligence
@@ -73,25 +74,33 @@ class SmartMoneyPipeline:
         log.info(f"  Min Score Threshold: {self.min_score}")
         log.info("=" * 60)
     
-    def confirm(self, signal: Signal, df: pd.DataFrame, 
+    def confirm(self, signal: UnifiedSignal, df: pd.DataFrame, 
                 order_book: Optional[Dict] = None,
-                regime_data: Optional[Dict] = None) -> Optional[Signal]:
+                regime_data: Optional[Dict] = None) -> Optional[UnifiedSignal]:
         """
         Run smart money confirmation on a signal that passed MTF
         
         Args:
-            signal: Signal that passed Phase 3 (MTF)
+            signal: UnifiedSignal that passed Phase 5 (MTF)
             df: OHLCV DataFrame
             order_book: Optional order book data (if available)
             regime_data: Optional regime data from Technical Phase
         
         Returns:
-            Updated signal or None if filtered out
+            Updated UnifiedSignal or None if filtered out
         """
-        # Only run on signals that passed MTF
-        if signal.status != SignalStatus.MTF_PASSED:
-            return None
+        # Check if MTF passed
+        mtf_passed = False
+        if hasattr(signal, 'metadata') and signal.metadata:
+            mtf_data = signal.metadata.get('mtf', {})
+            mtf_passed = mtf_data.get('is_confirmed', False)
+        elif hasattr(signal, 'status'):
+            mtf_passed = signal.status == 'MTF_PASSED'
         
+        if not mtf_passed:
+            log.debug(f"[SM] {signal.symbol}: MTF not passed, skipping smart money")
+            return None
+
         try:
             # Store component results
             component_results = {}
@@ -109,8 +118,7 @@ class SmartMoneyPipeline:
                 log.debug(f"[SM] Order Flow score: {orderflow_result.get('score', 0.5):.2f} | Bias: {orderflow_result.get('direction', 'NEUTRAL')}")
             
             # ===== 3. MARKET STRUCTURE ANALYSIS =====
-            # Using market_structure.py functions (already imported via microstructure)
-            from market_structure import get_structure_summary, get_structure_bias, get_structure_score
+            from market_structure import get_structure_summary
             
             market_structure_result = get_structure_summary(df)
             component_results['market_structure'] = market_structure_result
@@ -147,7 +155,7 @@ class SmartMoneyPipeline:
             
             # ===== 9. APPLY SMART MONEY FILTER =====
             if scoring_result.total_score < self.min_score:
-                log.debug(f"{signal.symbol}: Smart money score {scoring_result.total_score:.2f} < {self.min_score}")
+                log.debug(f"[SM] {signal.symbol}: Smart money score {scoring_result.total_score:.2f} < {self.min_score}")
                 return None
             
             # ===== 10. BUILD STORY =====
@@ -156,13 +164,12 @@ class SmartMoneyPipeline:
             # ===== 11. UPDATE SIGNAL =====
             signal.smart_money_score = scoring_result.total_score
             signal.orderflow_bias = scoring_result.dominant_direction
-            signal.status = SignalStatus.SMART_MONEY_PASSED
+            signal.status = "SMART_MONEY_PASSED"
             
             # Store all results in metadata
             if not hasattr(signal, 'metadata'):
                 signal.metadata = {}
             
-            # Store smart money results
             signal.metadata['smart_money'] = {
                 'score': scoring_result.total_score,
                 'bias': scoring_result.dominant_direction,
@@ -180,7 +187,7 @@ class SmartMoneyPipeline:
             signal.metadata['smart_money_key_points'] = story.key_points
             signal.metadata['smart_money_warnings'] = story.risk_warnings
             
-            # Store individual component results for strategies
+            # Store individual component results
             signal.metadata['liquidity_data'] = component_results.get('liquidity', {})
             signal.metadata['orderflow_data'] = component_results.get('orderflow', {})
             signal.metadata['structure_data'] = component_results.get('market_structure', {})
@@ -188,7 +195,7 @@ class SmartMoneyPipeline:
             signal.metadata['liquidations_data'] = component_results.get('liquidations', {})
             signal.metadata['market_maker_data'] = component_results.get('market_maker', {})
             
-            # Store liquidity flags for quick access (for strategies)
+            # Store liquidity flags for quick access
             liquidity_data = component_results.get('liquidity', {})
             signal.metadata['has_down_sweep'] = liquidity_data.get('has_down_sweep', False)
             signal.metadata['has_up_sweep'] = liquidity_data.get('has_up_sweep', False)
@@ -218,7 +225,7 @@ class SmartMoneyPipeline:
             return signal
             
         except Exception as e:
-            log.error(f"Error in smart money pipeline for {signal.symbol}: {e}", exc_info=True)
+            log.error(f"[SM] Error for {signal.symbol}: {e}", exc_info=True)
             return None
     
     def _analyze_market_maker(self, df: pd.DataFrame, 
@@ -372,7 +379,7 @@ class SmartMoneyPipeline:
             log.debug(f"Regime alignment error: {e}")
             return {'score': 0.5, 'bias': 0, 'alignment': 0, 'reasons': ['Error in alignment']}
     
-    def _print_smart_money_output(self, signal: Signal, 
+    def _print_smart_money_output(self, signal: UnifiedSignal, 
                                    scoring_result: SmartMoneyResult,
                                    story) -> None:
         """Print formatted smart money output"""
